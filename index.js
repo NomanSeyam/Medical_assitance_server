@@ -72,7 +72,7 @@ async function run() {
         }
         app.post('/jwt', (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user, process.env.JWT_ACCESS_TOCKEN, { expiresIn: '50h' })
+            const token = jwt.sign(user, process.env.JWT_ACCESS_TOCKEN, { expiresIn: '30h' })
             res.send({ token })
         })
         app.post('/users', async (req, res) => {
@@ -118,6 +118,18 @@ async function run() {
             const result = await Doctorscollection.find().toArray();
             res.send(result)
         })
+        app.get("/doctorBySearch/:text", async (req, res) => {
+            const text = req.params.text;
+            const result = await Doctorscollection
+                .find({
+                    $or: [
+                        { name: { $regex: text, $options: "i" } },
+                    ],
+                })
+                .toArray();
+            console.log(result)
+            res.send(result);
+        });
         app.get('/populardoctors', async (req, res) => {
             const result = await Doctorscollection.find().sort({ rating: -1 }).toArray();
             res.send(result)
@@ -143,11 +155,35 @@ async function run() {
             const result = await bloodCollection.find().toArray();
             res.send(result)
         })
+        app.get("/bloodBySearch/:text", async (req, res) => {
+            const text = req.params.text;
+            const result = await bloodCollection
+                .find({
+                    $or: [
+                        { blood: { $regex: text, $options: "i" } },
+                    ],
+                })
+                .toArray();
+            console.log(result)
+            res.send(result);
+        });
         app.get('/medicine', async (req, res) => {
+            console.log('5000')
             const result = await medicineCollection.find().toArray();
             res.send(result)
         })
-
+        app.get("/medicineBySearch/:text", async (req, res) => {
+            const text = req.params.text;
+            const result = await medicineCollection
+                .find({
+                    $or: [
+                        { name: { $regex: text, $options: "i" } },
+                    ],
+                })
+                .toArray();
+            console.log(result)
+            res.send(result);
+        });
         app.patch('/users/admin/:id', async (req, res) => {
             const id = req.params.id;
             // console.log(id);
@@ -207,7 +243,7 @@ async function run() {
             const result = await PostsCollection.find(query).toArray();
             res.send(result)
         })
-        app.delete('/class/:id', async (req, res) => {
+        app.delete('/post/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await PostsCollection.deleteOne(query);
@@ -259,17 +295,17 @@ async function run() {
 
         app.post('/visitpayment', async (req, res) => {
             const paymentInfo = req.body;
-            console.log('paymentInfo name', paymentInfo)
             // console.log('paymentInfo email', paymentInfo)
 
-            if (!paymentInfo.price_per_unit) {
+            if (paymentInfo.doctor) {
+                console.log('doctor', paymentInfo)
                 const data = {
                     total_amount: paymentInfo.payableAmount,
                     currency: 'BDT',
                     tran_id: tran_id, // use unique tran_id for each api call
-                    success_url: `http://localhost:5000/payment/success/${tran_id}`,
-                    fail_url: 'http://localhost:5000/payment/fail',
-                    cancel_url: 'http://localhost:5000/payment/fail',
+                    success_url: `https://doctors-server-alpha.vercel.app/payment/success/${tran_id}`,
+                    fail_url: 'https://doctors-server-alpha.vercel.app/payment/fail',
+                    cancel_url: 'https://doctors-server-alpha.vercel.app/payment/fail',
                     ipn_url: 'http://localhost:3030/ipn',
                     shipping_method: 'Courier',
                     product_name: 'Computer.',
@@ -318,10 +354,10 @@ async function run() {
 
                     // update bookingSerial 
 
-
                     // res.send({updateResult,})
                     res.redirect(`http://localhost:5173/dashbord/payment/successful/${tran_id}`)
                 })
+
 
                 app.post('/payment/fail', async (req, res) => {
                     res.redirect('http://localhost:5173/dashbord/payment/fail')
@@ -329,80 +365,116 @@ async function run() {
             }
 
             // for medicine 
-            const data = {
-                total_amount: paymentInfo.price_per_unit,
-                currency: 'BDT',
-                tran_id: tran_id, // use unique tran_id for each api call
-                success_url: `http://localhost:5000/payment/success/${tran_id}`,
-                fail_url: 'http://localhost:5000/payment/fail',
-                cancel_url: 'http://localhost:5000/payment/fail',
-                ipn_url: 'http://localhost:3030/ipn',
-                shipping_method: 'Courier',
-                product_name: 'Computer.',
-                product_category: 'Electronic',
-                product_profile: 'general',
-                cus_name: paymentInfo.Paitent_Name,
-                cus_email: paymentInfo.Patient_Email,
-                cus_add1: 'Dhaka',
-                cus_add2: 'Dhaka',
-                cus_city: 'Dhaka',
-                cus_state: 'Dhaka',
-                cus_postcode: '1000',
-                cus_country: 'Bangladesh',
-                cus_phone: '01711111111',
-                cus_fax: '01711111111',
-                ship_name: 'Customer Name',
-                ship_add1: 'Dhaka',
-                ship_add2: 'Dhaka',
-                ship_city: 'Dhaka',
-                ship_state: 'Dhaka',
-                ship_postcode: 1000,
-                ship_country: 'Bangladesh',
-            };
-            const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live)
-            sslcz.init(data).then(apiResponse => {
-                // Redirect the user to payment gateway
-                let GatewayPageURL = apiResponse.GatewayPageURL
-                res.send({ url: GatewayPageURL })
-                console.log('Redirecting to: ', GatewayPageURL)
-            });
-            app.post('/payment/success/:tran_id', async (req, res) => {
-                // console.log(req.params.tran_id)
-                // set payment id in mongodb
-                const paymentHistory = {
-                    Paitent_Name: paymentInfo.Paitent_Name,
-                    Patient_Email: paymentInfo.Patient_Email,
-                    name: paymentInfo.name,
-                    price_per_unit: paymentInfo.price_per_unit,
-                    group: paymentInfo.group,
-                    purpose: paymentInfo.purpose,
-                    company: paymentInfo.company,
-                    expire_date: paymentInfo.expire_date,
-                    tran_id: tran_id
-                }
-                console.log('paymentHistory' , paymentHistory)
-                // insert payment history 
-                const insertPaymentHistory = await paymentCollection.insertOne(paymentHistory);
 
-                // update bookingSerial 
+            if (paymentInfo.price_per_unit) {
+                console.log('paymentInfo price_per_unit' , paymentInfo)
+
+                const data = {
+                    total_amount: paymentInfo.price_per_unit,
+                    currency: 'BDT',
+                    tran_id: tran_id, // use unique tran_id for each api call
+                    success_url: `https://doctors-server-alpha.vercel.app/payment/success/${tran_id}`,
+                    fail_url: 'https://doctors-server-alpha.vercel.app/payment/fail',
+                    cancel_url: 'https://doctors-server-alpha.vercel.app/payment/fail',
+                    ipn_url: 'http://localhost:3030/ipn',
+                    shipping_method: 'Courier',
+                    product_name: 'Computer.',
+                    product_category: 'Electronic',
+                    product_profile: 'general',
+                    cus_name: paymentInfo.Paitent_Name,
+                    cus_email: paymentInfo.Patient_Email,
+                    cus_add1: 'Dhaka',
+                    cus_add2: 'Dhaka',
+                    cus_city: 'Dhaka',
+                    cus_state: 'Dhaka',
+                    cus_postcode: '1000',
+                    cus_country: 'Bangladesh',
+                    cus_phone: '01711111111',
+                    cus_fax: '01711111111',
+                    ship_name: 'Customer Name',
+                    ship_add1: 'Dhaka',
+                    ship_add2: 'Dhaka',
+                    ship_city: 'Dhaka',
+                    ship_state: 'Dhaka',
+                    ship_postcode: 1000,
+                    ship_country: 'Bangladesh',
+                };
+                const sslcz = new SSLCommerzPayment(store_id, store_passwd, is_live)
+                sslcz.init(data).then(apiResponse => {
+                    // Redirect the user to payment gateway
+                    let GatewayPageURL = apiResponse.GatewayPageURL
+                    res.send({ url: GatewayPageURL })
+                    console.log('Redirecting to: ', GatewayPageURL)
+                });
 
 
-                // res.send({updateResult,})
-                res.redirect(`http://localhost:5173/dashbord/payment/successful/${tran_id}`)
-            })
 
-            app.post('/payment/fail', async (req, res) => {
-                res.redirect('http://localhost:5173/dashbord/payment/fail')
-            })
+                app.post('/payment/success/:tran_id', async (req, res) => {
+                    // console.log(req.params.tran_id)
+                    // set payment id in mongodb
+                    const paymentHistory = {
+                        Paitent_Name: paymentInfo.Paitent_Name,
+                        Patient_Email: paymentInfo.Patient_Email,
+                        name: paymentInfo.name,
+                        price_per_unit: paymentInfo.price_per_unit,
+                        group: paymentInfo.group,
+                        purpose: paymentInfo.purpose,
+                        company: paymentInfo.company,
+                        expire_date: paymentInfo.expire_date,
+                        tran_id: tran_id
+                    }
+                    console.log('paymentHistory',paymentHistory)
+                    // console.log('paymentHistory', paymentHistory)
+                    // insert payment history 
+                    const insertPaymentHistory = await paymentCollection.insertOne(paymentHistory);
+
+                    // update bookingSerial 
+
+
+                    // res.send({updateResult,})
+                    // res.redirect(`http://localhost:5173/dashbord/payment/successful/${tran_id}`)
+                })
+
+                app.post('/payment/fail', async (req, res) => {
+                    // res.redirect('http://localhost:5173/dashbord/payment/fail')
+                })
+            }
 
         })
+
+        // app.patch('/paymentsuccess/:bookingID', async (req, res) => {
+        //     const bookingID = req.params.bookingID;
+        //     const Paymentfilter = { bookingID: bookingID };
+        //     const upaymentUpdateDoc = { $set: { payment_status: "paid" } };
+        //     const updateResult = await SelectedDoctorcollection.updateOne(Paymentfilter, upaymentUpdateDoc)
+        //     console.log(updateResult)
+        // })
+
+        // app.patch('/changeSerial/:bookingID', async (req, res) => {
+        //     const bookingID = req.params.bookingID;
+        //     // console.log('bookingID', bookingID)
+        //     const filter = { _id: new ObjectId(bookingID) };
+        //     // console.log('filter', filter)
+        //     const bookingPost = await PostsCollection.findOne(filter);
+        //     // console.log('bookingPost', bookingPost)
+        //     const updateDoc = {
+        //         $set:
+        //             { serial: bookingPost.serial - 1, bookingPatient: parseInt(bookingPost.bookingPatient) + 1 }
+        //     };
+        //     // console.log('updateDoc', updateDoc)
+        //     const updateResult = await PostsCollection.updateOne(filter, updateDoc)
+        //     // console.log('updateResult' , updateDoc)
+        //     res.send(updateResult)
+        // })
+
 
         app.patch('/paymentsuccess/:bookingID', async (req, res) => {
             const bookingID = req.params.bookingID;
             const Paymentfilter = { bookingID: bookingID };
-            const upaymentUpdateDoc = { $set: { payment_status: "paid" } };
-            const updateResult = await SelectedDoctorcollection.updateOne(Paymentfilter, upaymentUpdateDoc)
-            console.log(updateResult)
+            const paymentUpdateDoc = { $set: { payment_status: "paid" } };
+            const updateResult = await SelectedDoctorcollection.updateOne(Paymentfilter, paymentUpdateDoc)
+            console.log('updateResult' , updateResult , paymentUpdateDoc)
+            res.send(updateResult)
         })
         app.patch('/changeSerial/:bookingID', async (req, res) => {
             const bookingID = req.params.bookingID;
@@ -420,6 +492,8 @@ async function run() {
             // console.log('updateResult' , updateDoc)
             res.send(updateResult)
         })
+
+
 
         app.get('/paymenthistory', async (req, res) => {
             const result = await paymentCollection.find().toArray()
